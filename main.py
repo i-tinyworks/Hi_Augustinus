@@ -32,7 +32,7 @@ prompt = """
 답변마다, 현재 까지 대화 결과를 한문장의 영어 문장으로 요약해서 작성해줘.
 """
 
-# 시스템 메시지 설정
+# 시스템 프롬프트 설정
 if "messages" not in st.session_state:
     st.session_state.messages = [
         {
