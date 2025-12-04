@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ==============================
-# 1) Supabase 연결 체크 함수
+# 1) Supabase 연결 상태 체크 함수
 # ==============================
 def check_supabase_connection(supabase):
     try:
@@ -20,36 +20,38 @@ def check_supabase_connection(supabase):
 
 
 # ==============================
-# 2) LLM / Embedding / Supabase 클라이언트
+# 2) Cerebras LLM (Chat 모델)
 # ==============================
 client = OpenAI(
     base_url="https://api.cerebras.ai/v1",
     api_key=os.getenv("CEREBRAS_API_KEY")
 )
 
-embed_client = OpenAI(
-    api_key=os.getenv("OPENAI_API_KEY")
-)
+# ==============================
+# 3) OpenAI Embedding 모델
+# ==============================
+embed_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+# ==============================
+# 4) Supabase 연결
+# ==============================
 supabase = create_client(
     os.getenv("SUPABASE_URL"),
     os.getenv("SUPABASE_SERVICE_KEY")
 )
 
-
 # ==============================
-# 3) Sidebar (모델 선택 + Think Mode + Supabase 상태)
+# 5) Sidebar – 모델 선택 + DB 상태
 # ==============================
 st.sidebar.title("⚙️ 설정")
 
-# --- Supabase 상태 표시 ---
 supabase_ok, supabase_msg = check_supabase_connection(supabase)
+
 if supabase_ok:
     st.sidebar.success("🟢 Supabase 연결됨")
 else:
-    st.sidebar.error(f"🔴 Supabase 연결 실패\n{supabase_msg}")
+    st.sidebar.error(f"🔴 Supabase 연결 실패\n\n{supabase_msg}")
 
-# --- 모델 선택 ---
 model_options = {
     "GPT-OSS 120B": "gpt-oss-120b",
     "QWen 32B": "qwen-3-32b",
@@ -63,23 +65,15 @@ selected_model_name = st.sidebar.selectbox(
 
 st.session_state["llm_model"] = model_options[selected_model_name]
 
-# --- Think / No-Think 모드 ---
-think_mode = st.sidebar.radio(
-    "🧠 Thinking Mode",
-    ["Think", "No-Think"]
-)
-
-st.session_state["think_mode"] = think_mode
-
 
 # ==============================
-# 4) UI 타이틀
+# 6) UI 타이틀
 # ==============================
 st.title("Hi 어거스틴 😎✝️")
 
 
 # ==============================
-# 5) 시스템 메시지
+# 7) 시스템 메시지 (어거스틴 역할)
 # ==============================
 prompt = """
 역할: 너는 히포의 어거스틴(Augustine of Hippo)의 역할을 수행한다.
@@ -94,16 +88,15 @@ prompt = """
 6) 복잡한 개념도 쉽게 설명
 7) 핵심만 간결하게 요약
 8) 마지막 문장에 라틴어 한 문장 요약 추가
-9) context에 없는 내용은 "본문에는 없습니다"라고 답변
-10) 답변은 도중에 끊기지 않고 완결되어야 한다.
+9) context에 없는 내용은 "본문에는 없습니다"라고 정확히 말한다.
+10) 대답은 도중에 끊기지 않고 자연스럽게 마쳐져야 한다.
 """
 
 
 # ==============================
-# 6) RAG 검색 기능
+# 8) RAG 검색 기능
 # ==============================
 def embed_text(text: str):
-    """임베딩 생성"""
     res = embed_client.embeddings.create(
         model="text-embedding-3-large",
         input=text
@@ -112,7 +105,6 @@ def embed_text(text: str):
 
 
 def search_supabase(query_embedding, match_count=5):
-    """벡터 검색"""
     response = supabase.rpc(
         "match_documents",
         {
@@ -124,25 +116,21 @@ def search_supabase(query_embedding, match_count=5):
 
 
 def build_context(question: str):
-    """문맥 구성"""
     emb = embed_text(question)
     matches = search_supabase(emb, match_count=5)
     return "\n\n".join([m["content"] for m in matches])
 
 
 def ask_llm(question: str, context: str):
-    """LLM에게 질문"""
     rag_prompt = f"""
 [Context: Augustine 문헌 자료]
 {context}
 
-너는 반드시 위 context 내용만 참고하여 답변해야 한다.
-"""
+위 context 내용만 참고하여 질문에 답하라.
+context에 없는 내용은 "본문에는 없습니다."라고 답변하라.
 
-    # Thinking 모드 적용
-    extra = {
-        "mode": "think" if st.session_state["think_mode"] == "Think" else "no_think"
-    }
+질문: {question}
+"""
 
     completion = client.chat.completions.create(
         model=st.session_state["llm_model"],
@@ -151,18 +139,19 @@ def ask_llm(question: str, context: str):
             {"role": "user", "content": rag_prompt}
         ],
         temperature=0.4,
-        max_completion_tokens=1000,
-        extra_body=extra
+        max_completion_tokens=1000
     )
 
     return completion.choices[0].message.content
 
 
 # ==============================
-# 7) 기존 메시지 출력
+# 9) 이전 대화 출력
 # ==============================
 if "messages" not in st.session_state:
-    st.session_state.messages = [{"role": "system", "content": prompt}]
+    st.session_state.messages = [
+        {"role": "system", "content": prompt}
+    ]
 
 for msg in st.session_state.messages:
     if msg["role"] != "system":
@@ -171,7 +160,7 @@ for msg in st.session_state.messages:
 
 
 # ==============================
-# 8) 사용자 입력 처리
+# 10) 사용자 입력 처리
 # ==============================
 if user_input := st.chat_input("신앙/신학 무엇이 궁금한가요?"):
 
@@ -180,23 +169,22 @@ if user_input := st.chat_input("신앙/신학 무엇이 궁금한가요?"):
     with st.chat_message("user"):
         st.markdown(user_input)
 
-    # RAG
+    # 🔎 RAG Context 생성
     context = build_context(user_input)
 
-    # LLM 응답
+    # 💬 답변 생성
     answer = ask_llm(user_input, context)
 
+    # 출력
     with st.chat_message("assistant"):
         st.markdown(answer)
 
-    st.session_state.messages.append({
-        "role": "assistant",
-        "content": answer
-    })
+    # 히스토리 저장
+    st.session_state.messages.append({"role": "assistant", "content": answer})
 
 
 # ==============================
-# 9) Streamlit 로컬 실행
+# 11) Streamlit 로컬 실행
 # ==============================
 if __name__ == "__main__":
     import subprocess
