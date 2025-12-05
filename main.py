@@ -110,9 +110,9 @@ else:
 
 # ✔ 기본 모델을 Qwen-3-32B로 설정
 model_options = {
-    "Qwen 3-32B (추천)": "qwen-3-32b",
-    "LLaMA 3.1 8B (가성비)": "llama3.1-8b",
-    "GPT-OSS 120B (권장X)": "gpt-oss-120b"
+    "Qwen 3-32B": "qwen-3-32b",
+    "LLaMA 3.1 8B": "llama3.1-8b",
+    "GPT-OSS 120B": "gpt-oss-120b"
 }
 
 selected_model_name = st.sidebar.selectbox(
