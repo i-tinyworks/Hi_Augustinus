@@ -178,7 +178,7 @@ context에 없는 내용은 반드시 "본문에는 없습니다."라고 답할 
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": rag_prompt}
             ],
-            temperature=0.4,
+            temperature=0.3,
             max_completion_tokens=1000
         )
         return completion.choices[0].message.content
